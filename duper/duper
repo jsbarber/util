@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+""" Program to grab a copy of files as they appear in one location, creating a
+    duplicate version in another location """
+
+from __future__ import print_function
+import shutil
+import os
+import sys
+import argparse
+from fnmatch import fnmatch
+
+try:
+    from pyinotify import  ProcessEvent, WatchManager, Notifier, IN_CLOSE_WRITE, IN_MOVED_TO
+except ImportError:
+    print("""'import pyinotify' failed. You might need to do one of these:
+        yum install python-inotify
+        apt install python-pyinotify
+        pip install pyinotify""", file=sys.stderr)
+    sys.exit(1)
+
+class EventHandler(ProcessEvent):
+    """ Event handler class """
+    def __init__(self, watch_dir, copy_dir, include=None, exclude=None):
+        super(EventHandler, self).__init__()
+        self.watch_dir = os.path.abspath(watch_dir)
+        self.watch_len = len(self.watch_dir)
+        self.copy_dir = os.path.abspath(copy_dir)
+        self.include = include or ["*"]
+        self.exclude = exclude or []
+
+    def process_default(self, event):
+        """ Handle one event """
+        # print("EVENT mask={} maskname={} name={} path={} pathname={}".format(
+        #     event.mask, event.maskname, event.name, event.path, event.pathname))
+
+        if event.mask not in (IN_CLOSE_WRITE, IN_MOVED_TO):
+            return
+
+        rel_dir = os.path.relpath(event.path, self.watch_dir)
+        rel_path = os.path.normpath(os.path.join(rel_dir, event.name))
+
+        # Include and exclude are applied against the relative path
+        if not any((fnmatch(event.name, inc) or fnmatch(rel_path, inc))
+                   for inc in self.include):
+            # print("Not included by any pattern {}".format(rel_path))
+            return
+        if any((fnmatch(event.name, exc) or fnmatch(rel_path, exc))
+               for exc in self.exclude):
+            # print("Excluded by pattern {}".format(rel_path))
+            return
+
+        new_dir = os.path.join(self.copy_dir, rel_dir)
+        if not os.path.exists(new_dir):
+            os.makedirs(new_dir)
+        rel_file = os.path.join(self.copy_dir, rel_path)
+        try:
+            shutil.copyfile(event.pathname, rel_file)
+            print("Copied {} to {}".format(event.pathname, rel_file))
+        except IOError as exc:
+            print("FAILED {} to {} - {}".format(event.pathname, rel_file, exc))
+
+
+def main():
+    """ Main entry point. Handle watching a directory and copying items off to
+        another directory. """
+    parser = argparse.ArgumentParser()
+    parser.add_argument("watch_dir", help="directory from which to grab files")
+    parser.add_argument("copy_dir", help="directory to which files are copied")
+    parser.add_argument("--include", "-i", action='append',
+                        help="glob-pattern to include (default any)")
+    parser.add_argument("--exclude", "-e", action='append',
+                        help="glob-pattern to exclude (default none)")
+    args = parser.parse_args()
+    # print(args)
+
+    watch_dir = args.watch_dir
+    copy_dir = args.copy_dir
+
+    if not os.path.isdir(watch_dir) or not os.path.isdir(copy_dir):
+        print("watch_dir and copy_dir must be directories", file=sys.stderr)
+        parser.print_help(file=sys.stderr)
+        sys.exit(1)
+
+    watch_mgr = WatchManager()
+    mask = IN_CLOSE_WRITE | IN_MOVED_TO
+    handler = EventHandler(watch_dir, copy_dir, include=args.include, exclude=args.exclude)
+    notifier = Notifier(watch_mgr, handler)
+    watch_mgr.add_watch(watch_dir, mask, rec=True, auto_add=True)
+
+    notifier.loop()
+
+
+if __name__ == '__main__':
+    main()
