@@ -1,4 +1,4 @@
-# grab\_files
+# duper
 
 This program watches a directory that is producing some kind of files and grabs
 a copy of the files, placing them in another directory
@@ -18,13 +18,13 @@ yum install python-inotify
 Then just copy the script to a directory in your path. Make sure it's got executable permission
 
 ```
-cp grab_files /usr/local/bin/
-chmod +x /usr/local/bin/grab_files
+cp duper /usr/local/bin/
+chmod +x /usr/local/bin/duper
 ```
 
 ### Usage
 
-grab\_files [ -i/--include include-pattern ] ... [ -e/--exclude exclude-pattern ] ... watch-directory destination-directory
+duper [ -i/--include include-pattern ] ... [ -e/--exclude exclude-pattern ] ... watch-directory destination-directory
 
 - watch-directory
   Directory from which files are copied. The program watches for `CLOSE_WRITE` and `MOVED_TO` items from `inotify`. The directory is monitored recursively (i.e. sub-directories are also monitored).
@@ -47,13 +47,13 @@ It is possible for files to appear and then be removed faster than this program 
 1. Copy all files produced in /usr/tmp into ./tmp\_copy
 
 ```
-grab_files /usr/tmp tmp_copy
+duper /usr/tmp tmp_copy
 ```
 
 2. Copy all files ending in .done as well as all files beginning with "sum_" from /var/lib/docker/volumes/output-logs/_data to ./output-logs:
 
 ```
-grab_files -i '*.done' -i 'sum_*' /var/lib/docker/volumes/output-logs/_data output-logs
+duper -i '*.done' -i 'sum_*' /var/lib/docker/volumes/output-logs/_data output-logs
 ```
 
 
